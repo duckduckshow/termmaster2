@@ -170,36 +170,29 @@ function updateProgress(correct){
     return `${term} = ?`;
   }
 
-function createLevel2Task(){
+function createLevel2Task() {
   const termCount = Math.floor(Math.random() * 3) + 2; // 2–4 Terme
-  const allVars = [...VARS];
-  const used = [];
-  let terms = [];
-
-  // Entscheide, ob gleichartige Variablen vorkommen sollen (⅔ der Fälle)
-  const hasDuplicates = Math.random() < 0.66;
-
-  // wähle 2–3 Variablen
-  const varCount = hasDuplicates ? 2 : Math.min(3, termCount);
-  for (let i = 0; i < varCount; i++) {
-    const v = randomChoice(allVars.splice(Math.floor(Math.random()*allVars.length),1));
-    used.push(v);
+  const chosenVars = [randomChoice(VARS)];
+  if (Math.random() < 0.5) { // manchmal zweite Variable
+    let second;
+    do { second = randomChoice(VARS); } while (second === chosenVars[0]);
+    chosenVars.push(second);
   }
 
-  // Erzeuge die Terme
+  let terms = [];
   for (let i = 0; i < termCount; i++) {
-    const v = hasDuplicates ? randomChoice(used) : used[i % used.length];
+    const includeNumber = Math.random() < 0.3; // ca. 30 % reine Zahl
+    const v = includeNumber ? "" : randomChoice(chosenVars);
     const c = randomCoeff() * sgn();
     terms.push(formatTerm(c, v));
   }
 
-  // Ausdruck hübsch darstellen
-  const expression = terms.join(" + ").replace(/\+\s*\-/g,"- ");
+  const expression = terms.join(" + ").replace(/\+\s*\-/g, "- ");
 
-  // ➕ Gleiche Variablen zusammenfassen
+  // Gleiche Variablen zusammenfassen
   const collected = {};
   for (const t of terms) {
-    const m = t.match(/([+\-]?\d*)([a-z])/);
+    const m = t.match(/([+\-]?\d*)([a-z]?)/);
     if (!m) continue;
     let coeff = m[1];
     if (coeff === "" || coeff === "+") coeff = 1;
@@ -209,12 +202,13 @@ function createLevel2Task(){
   }
 
   // alphabetisch sortierte Ausgabe
-  const sorted = Object.entries(collected).sort((a,b)=>a[0].localeCompare(b[0]));
+  const sorted = Object.entries(collected).sort((a, b) => a[0].localeCompare(b[0]));
   let result = "";
-  for (const [v,c] of sorted) {
+  for (const [v, c] of sorted) {
     if (c === 0) continue;
     if (result && c > 0) result += "+";
-    if (c === 1) result += v;
+    if (v === "") result += c; // reine Zahl
+    else if (c === 1) result += v;
     else if (c === -1) result += "-" + v;
     else result += c + v;
   }
