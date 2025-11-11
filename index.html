@@ -110,10 +110,15 @@ document.addEventListener("DOMContentLoaded", () => {
       .replace(/\-\-/g, '+');
   }
 
-  // Alphabetisch + nach Hochzahl sortieren
-  function normalizeTerm(str) {
-    str = cleanOnes(str).replace(/\s+/g,'').replace(/\*/g,'');
-    const parts = str.match(/[+\-]?\d*[a-z]?\^?\d*/g)?.filter(p=>p) || [str];
+function normalizeTerm(str) {
+  if (!str) return "0";
+  str = str.trim()
+           .replace(/^\+/, "") // <-- entfernt führendes Plus
+           .replace(/\s+/g,'')
+           .replace(/\*/g,'')
+           .replace(/([a-z])(\d)/g,'$1^$2'); // falls x2 statt x^2 geschrieben wird
+  // … (rest deiner bisherigen normalizeTerm-Funktion)
+}
 
     const parsed = parts.map(p=>{
       const m = p.match(/^([+\-]?\d*)([a-z]?)(?:\^(\d+))?$/);
