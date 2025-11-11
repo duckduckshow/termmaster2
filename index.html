@@ -18,19 +18,17 @@
   #score { font-size:1.1em; margin:8px; color:#333; }
   #levelDisplay { font-weight:bold; color:#007bff; margin-bottom:5px; }
 
-  /* Fortschritt: 10 gleiche Segmente, nur einmal färben */
   #progressContainer {
-    width:80%; max-width:420px; height:20px;
+    width:80%; max-width:400px; height:20px;
     background-color:#ddd; border-radius:10px;
     margin:10px auto 20px; overflow:hidden; display:flex;
   }
-  .progress-segment {
-    height:100%; flex:1; background:#ddd;
-    transition:background-color .25s ease;
-  }
+  .barSegment { height:100%; flex:1; background:#ddd; transition:background 0.3s; }
+  .barSegment.correct { background:#4caf50; }
+  .barSegment.wrong { background:#d9534f; }
 
   input {
-    padding:10px; font-size:1.2em; width:80%; max-width:420px;
+    padding:10px; font-size:1.2em; width:80%; max-width:300px;
     text-align:center; border-radius:8px; border:1px solid #aaa;
   }
   input:focus { outline:none; border-color:#007bff; }
@@ -47,13 +45,10 @@
 <div id="levelDisplay">Level 1: Gleiche Terme</div>
 <div id="score">Lade...</div>
 <div id="progressContainer"></div>
-
 <div id="task">...</div>
-
 <input type="text" id="answer" placeholder="Zusammengefasster Term" autocomplete="off" spellcheck="false"><br>
 <button id="checkBtn">Prüfen</button>
 <button id="newBtn">Neue Aufgabe</button>
-
 <p id="result"></p>
 
 <p style="font-size:0.8em;color:#555;margin-top:40px;">
@@ -64,311 +59,210 @@ Diese Seite speichert keine persönlichen Daten und läuft vollständig lokal im
 <script>
 document.addEventListener("DOMContentLoaded", () => {
 
-  const answerEl = document.getElementById("answer");
-  const checkBtn = document.getElementById("checkBtn");
-  const newBtn = document.getElementById("newBtn");
-  const taskEl = document.getElementById("task");
-  const resultEl = document.getElementById("result");
-  const scoreEl = document.getElementById("score");
-  const levelDisplay = document.getElementById("levelDisplay");
-  const progressContainer = document.getElementById("progressContainer");
+  const answerEl=document.getElementById("answer");
+  const checkBtn=document.getElementById("checkBtn");
+  const newBtn=document.getElementById("newBtn");
+  const taskEl=document.getElementById("task");
+  const resultEl=document.getElementById("result");
+  const scoreEl=document.getElementById("score");
+  const levelDisplay=document.getElementById("levelDisplay");
+  const progressContainer=document.getElementById("progressContainer");
 
-  const VARS = ['a','b','m','n','x','y','z'];
-  const randomChoice = a => a[Math.floor(Math.random()*a.length)];
-  const randomCoeff = (max=5) => Math.floor(Math.random()*max)+1;
-  const sgn = () => Math.random()<0.5 ? -1 : +1;
+  const VARS=['a','b','m','n','p','q','x','y','z'];
+  const randomChoice=a=>a[Math.floor(Math.random()*a.length)];
+  const randomCoeff=()=>Math.floor(Math.random()*9)+1;
+  const sgn=()=>Math.random()<0.5?-1:1;
 
-  let level = 1, round = 1, totalRounds = 10, score = 0;
-  let correctSolution = "";          // bereits kanonisch sortiert
-  let firstTry = true;               // Punkte nur beim ersten Versuch
-  let answered = false;              // farbt Segment nur einmal
-  const segments = [];
+  let level=1, correctSolution="", round=1, score=0, totalRounds=10, firstTry=true;
+  const progressSegments = [];
 
-  /* ---------------- Fortschrittsbalken ---------------- */
-  function initProgressBar() {
-    progressContainer.innerHTML = "";
-    segments.length = 0;
-    for (let i=0;i<totalRounds;i++) {
-      const seg = document.createElement("div");
-      seg.className = "progress-segment";
+  function setupProgress(){
+    progressContainer.innerHTML="";
+    for(let i=0;i<totalRounds;i++){
+      const seg=document.createElement("div");
+      seg.className="barSegment";
       progressContainer.appendChild(seg);
-      segments.push(seg);
+      progressSegments.push(seg);
     }
   }
 
-  const LEVEL_NAMES = [
-    "Level 1: Gleiche Terme",
-    "Level 2: Verschiedene Variablen",
-    "Level 3: Klammerausdrücke"
-  ];
-
-  /* ---------------- Hilfsfunktionen ---------------- */
-
-  // Für die AUFGABEN-DARSTELLUNG:
-  // positive Zahl: in 3/4 der Fälle (+n) in Klammern, sonst n ohne Klammern
-  // negative Zahl: immer ( -n )
-  function showNumberWithOptionalParens(n) {
-    if (n < 0) return `(${n})`;
-    return Math.random() < 0.75 ? `(+${n})` : `${n}`;
-  }
-
-  // 1x -> x, -1x -> -x, 0x -> 0 (wird später weggelassen)
-  function formatTerm(coeff, variable="") {
-    coeff = Number(coeff);
-    if (isNaN(coeff)) coeff = 0;
-    if (variable === "") return `${coeff}`;
-    if (coeff === 1) return `${variable}`;
-    if (coeff === -1) return `-${variable}`;
-    return `${coeff}${variable}`;
-  }
-
-  // **KANONISCHE Form** (für richtige Lösung und strengen Vergleich):
-  // - fasst gleichartige Terme zusammen
-  // - sortiert alphabetisch, dann Exponent absteigend
-  // - entfernt führendes +, 1x, doppelte Vorzeichen etc.
-  function canonical(str) {
-    if (!str) return "0";
-    str = str.trim()
-             .replace(/^\+/, "")
-             .replace(/\s+/g, "")
-             .replace(/\*\*/g, "^")
-             .replace(/\*/g, "")
-             .replace(/\-\-/g, "+")
-             .replace(/\+\+/g, "+");
-
-    // Teile wie -3x^2, +4x, -7, y
-    const parts = str.match(/[+\-]?\d*[a-z]?\^?\d*/g)?.filter(Boolean) || [];
-
-    const parsed = parts.map(p => {
-      const m = p.match(/^([+\-]?\d*)([a-z]?)(?:\^(\d+))?$/);
-      if (!m) return { coeff:0, var:"", exp:0 };
-      let coeff = Number(m[1]);
-      const variable = m[2] || "";
-      const exp = Number(m[3] || (variable ? 1 : 0));
-
-      if (isNaN(coeff)) {
-        if (m[1] === "-" || p.startsWith("-")) coeff = -1;
-        else if (m[1] === "+" || (m[1] === "" && variable)) coeff = 1;
-        else coeff = 0;
+  function updateProgress(correct){
+    if(round>1 && round<=totalRounds+1){
+      const seg=progressSegments[round-2];
+      if(seg && !seg.classList.contains("correct") && !seg.classList.contains("wrong")){
+        seg.classList.add(correct?"correct":"wrong");
       }
-      return { coeff, var:variable, exp };
-    });
+    }
+  }
 
-    // sortieren: alphabetisch, dann exponent fallend
+  function formatTerm(coeff, variable){
+    if(variable===""){
+      if(coeff>=0 && Math.random()<0.75) return `(+${coeff})`;
+      return coeff<0?`(${coeff})`:`${coeff}`;
+    }
+    if(coeff===1) return variable;
+    if(coeff===-1) return `-${variable}`;
+    return coeff+variable;
+  }
+
+  function normalizeTerm(str){
+    if(!str) return "0";
+    str=str.trim().replace(/\s+/g,"").replace(/^(\+)/,"");
+    const parts=str.match(/[+\-]?\d*[a-z]?(?:\^\d+)?/g)?.filter(Boolean)||[];
+    const parsed=parts.map(p=>{
+      const m=p.match(/^([+\-]?\d*)([a-z]?)(?:\^(\d+))?$/);
+      if(!m) return {coeff:0,var:"",exp:0};
+      let coeff=m[1];
+      const variable=m[2]||"";
+      const exp=Number(m[3]|| (variable?1:0));
+      if(coeff===""||coeff==="+") coeff=1;
+      else if(coeff==="−"||coeff==="-") coeff=-1;
+      coeff=Number(coeff);
+      if(isNaN(coeff)) coeff=0;
+      return {coeff,var:variable,exp};
+    });
     parsed.sort((a,b)=>{
-      if (a.var < b.var) return -1;
-      if (a.var > b.var) return 1;
-      return b.exp - a.exp;
+      if(a.var<b.var)return -1;
+      if(a.var>b.var)return 1;
+      return b.exp-a.exp;
     });
-
-    // gleichartige zusammenfassen
-    const combined = [];
-    for (const t of parsed) {
-      if (combined.length &&
-          combined[combined.length-1].var === t.var &&
-          combined[combined.length-1].exp === t.exp) {
-        combined[combined.length-1].coeff += t.coeff;
-      } else {
-        combined.push({...t});
-      }
+    const combined=[];
+    for(const t of parsed){
+      if(t.coeff===0)continue;
+      const last=combined[combined.length-1];
+      if(last&&last.var===t.var&&last.exp===t.exp) last.coeff+=t.coeff;
+      else combined.push({...t});
     }
-
-    // wieder zusammensetzen
-    let result = "";
-    for (const t of combined) {
-      if (t.coeff === 0) continue;
-      let part = "";
-      if (t.var === "") {
-        part = t.coeff.toString();
-        if (t.coeff > 0 && result) part = "+" + part;
-      } else if (t.coeff === 1) {
-        part = t.var + (t.exp>1 ? "^"+t.exp : "");
-        if (result) part = "+" + part;
-      } else if (t.coeff === -1) {
-        part = "-"+t.var + (t.exp>1 ? "^"+t.exp : "");
-      } else {
-        part = t.coeff + t.var + (t.exp>1 ? "^"+t.exp : "");
-        if (t.coeff > 0 && result) part = "+" + part;
+    let result="";
+    for(const t of combined){
+      if(t.coeff===0)continue;
+      let part="";
+      if(t.var===""){
+        part=t.coeff.toString();
+        if(t.coeff>0&&result)part="+"+part;
+      }else if(t.coeff===1){
+        part=t.var+(t.exp>1?"^"+t.exp:"");
+        if(result)part="+"+part;
+      }else if(t.coeff===-1){
+        part="-"+t.var+(t.exp>1?"^"+t.exp:"");
+      }else{
+        part=t.coeff+t.var+(t.exp>1?"^"+t.exp:"");
+        if(t.coeff>0&&result)part="+"+part;
       }
-      result += part;
+      result+=part;
     }
-    if (!result) result = "0";
-    return result.replace(/^\+/, "");
+    return result||"0";
   }
 
-  // **Bereinigung für die Schüler-Eingabe** (Reihenfolge bleibt ERHALTEN!):
-  // - entfernt Leerzeichen, führendes +, doppelte Vorzeichen, 1x -> x
-  // - KEIN Sortieren, KEIN Zusammenfassen
-  function cleanPreserveOrder(str) {
-    if (!str) return "";
-    return str.trim()
-              .replace(/^\+/, "")
-              .replace(/\s+/g, "")
-              .replace(/\*\*/g, "^")
-              .replace(/\*/g, "")
-              .replace(/\-\-/g, "+")
-              .replace(/\+\+/g, "+")
-              .replace(/(^|[+\-])1([a-z])/g, "$1$2");
-  }
-
-  /* ---------------- Aufgaben-Generatoren ---------------- */
-
-  // L1: gleiche Terme (z. B. -3b + 2b)
   function createLevel1Task(){
-    const v = randomChoice(VARS) || "x";
-    const c1 = Number(randomCoeff() * sgn());
-    const c2 = Number(randomCoeff() * sgn());
-
-    const term = `${formatTerm(c1, v)} ${c2 >= 0 ? '+' : '-'} ${formatTerm(Math.abs(c2), v)}`;
-    const sum = (isNaN(c1)?0:c1) + (isNaN(c2)?0:c2);
-
-    let formatted;
-    if (sum === 0) formatted = "0";
-    else if (sum === 1) formatted = v;
-    else if (sum === -1) formatted = "-" + v;
-    else formatted = formatTerm(sum, v);
-
-    correctSolution = canonical(formatted);     // kanonisch sortiert (hier trivial)
+    const v=randomChoice(VARS);
+    const c1=Number(randomCoeff()*sgn());
+    const c2=Number(randomCoeff()*sgn());
+    const term=`${formatTerm(c1,v)} ${c2>=0?'+':'-'} ${formatTerm(Math.abs(c2),v)}`;
+    const sum=c1+c2;
+    let formatted="";
+    if(sum===0)formatted="0";
+    else if(sum===1)formatted=v;
+    else if(sum===-1)formatted="-"+v;
+    else formatted=sum+v;
+    correctSolution=normalizeTerm(formatted);
     return `${term} = ?`;
   }
 
-  // L2: verschiedene Variablen (z. B. -b + 4m - 2b)
   function createLevel2Task(){
-    const v1 = randomChoice(VARS);
-    let v2 = randomChoice(VARS); while (v2 === v1) v2 = randomChoice(VARS);
-
-    const c1 = Number(randomCoeff() * sgn());
-    const c2 = Number(randomCoeff() * sgn());
-    const c3 = Number(randomCoeff() * sgn());
-
-    const term = `${formatTerm(c1, v1)} ${c2 >= 0 ? '+' : '-'} ${formatTerm(Math.abs(c2), v2)} ${c3 >= 0 ? '+' : '-'} ${formatTerm(Math.abs(c3), v1)}`;
-
-    // kanonische Lösung bilden: zusammenfassen & alphabetisch
-    let res = "";
-    const sumV1 = (isNaN(c1)?0:c1) + (isNaN(c3)?0:c3);
-    if (sumV1 !== 0) res += formatTerm(sumV1, v1);
-    if (c2 !== 0) {
-      const s = (res ? (c2>0 ? "+" : "-") : (c2>0 ? "" : "-"));
-      res += s + formatTerm(Math.abs(c2), v2);
+    const count=Math.floor(Math.random()*3)+2;
+    const used=new Set();
+    let terms=[];
+    for(let i=0;i<count;i++){
+      let v=randomChoice(VARS);
+      while(used.has(v))v=randomChoice(VARS);
+      used.add(v);
+      const c=randomCoeff()*sgn();
+      terms.push(formatTerm(c,v));
     }
-    correctSolution = canonical(res || "0");
-    return `${term} = ?`;
+    const expression=terms.join(" + ").replace(/\+\s*\-/g,"- ");
+    const parsed=terms.map(t=>{
+      const m=t.match(/([+\-]?\d*)([a-z])/);
+      if(!m)return {coeff:0,var:""};
+      let coeff=m[1];
+      if(coeff===""||coeff==="+")coeff=1;
+      if(coeff==="-")coeff=-1;
+      return {coeff:Number(coeff),var:m[2]};
+    });
+    parsed.sort((a,b)=>a.var.localeCompare(b.var));
+    let result="";
+    for(const t of parsed){
+      if(t.coeff===0)continue;
+      if(result&&t.coeff>0)result+="+";
+      if(t.coeff===1)result+=t.var;
+      else if(t.coeff===-1)result+="-"+t.var;
+      else result+=t.coeff+t.var;
+    }
+    correctSolution=normalizeTerm(result);
+    return `${expression} = ?`;
   }
 
-  // L3: einfache Klammern: (n) ± (c v ± k)
   function createLevel3Task(){
-    const v = randomChoice(VARS);
-    const outer = Number(Math.floor(Math.random()*9) - 4);   // -4..+4
-    const cVar = Number(randomCoeff() * sgn());
-    const cNum = Number(randomCoeff() * sgn());
-    const op = Math.random() < 0.5 ? '+' : '-';
-
-    const outside = (outer < 0) ? `(${outer})` : showNumberWithOptionalParens(outer);
-    const inside  = `(${formatTerm(cVar, v)} ${cNum>=0?'+':'-'} ${Math.abs(cNum)})`;
-    const task = `${outside} ${op} ${inside}`;
-
-    // Auflösen
-    const varPart = (op==='+') ? cVar : -cVar;
-    const numPart = outer + ((op==='+') ? cNum : -cNum);
-
-    let res = "";
-    if (varPart !== 0) res += formatTerm(varPart, v);
-    if (numPart !== 0) {
-      const s = (res ? (numPart>0 ? "+" : "-") : (numPart>0 ? "" : "-"));
-      res += s + Math.abs(numPart);
-    }
-    correctSolution = canonical(res || "0");
-    return `${task} = ?`;
-  }
-
-  /* ---------------- Level/Task Ablauf ---------------- */
-
-  function nextLevel(){
-    if (score>=8 && level<3) {
-      level++;
-      alert(`🎯 Level ${level-1} geschafft! Weiter mit ${LEVEL_NAMES[level-1]}.`);
-    } else if (score>=8 && level===3) {
-      alert("🏆 Alle Level geschafft! Super!");
-    } else {
-      alert(`Level ${level} beendet mit ${score}/${totalRounds} Punkten. Versuch es nochmal!`);
-    }
-    round=1; score=0;
-    segments.forEach(s=>s.style.backgroundColor="#ddd");
-    newTask();
+    const a=randomCoeff()*sgn();
+    const b=randomCoeff()*sgn();
+    const c=randomCoeff()*sgn();
+    const v=randomChoice(VARS);
+    const term=`(${formatTerm(a,"")}) - (${formatTerm(b,v)} ${c>=0?'-':'+'} ${formatTerm(Math.abs(c),"")})`;
+    const res=a - b - c;
+    let result="";
+    if(res===0)result="0";
+    else if(res===1)result=v;
+    else if(res===-1)result="-"+v;
+    else result=res+v;
+    correctSolution=normalizeTerm(result);
+    return `${term} = ?`;
   }
 
   function newTask(){
-    resultEl.innerText=""; answerEl.value="";
-    firstTry = true; answered = false;
-    levelDisplay.innerText = LEVEL_NAMES[level-1];
-
-    if (round>totalRounds) {
-      resultEl.style.color="green";
-      resultEl.innerHTML = `🎉 Level fertig!<br>Endstand: ${score}/${totalRounds}`;
-      nextLevel(); return;
+    resultEl.innerText="";answerEl.value="";firstTry=true;
+    if(round>totalRounds){
+      level++;
+      if(level>3){resultEl.innerText="🎉 Alle Level geschafft!";return;}
+      round=1;score=0;
+      progressSegments.forEach(seg=>{seg.className="barSegment";});
+      levelDisplay.innerText=`Level ${level}: ${["Gleiche Terme","Verschiedene Variablen","Klammerausdrücke"][level-1]}`;
     }
-
-    let aufgabe;
+    let aufgabe="";
     switch(level){
-      case 1: aufgabe=createLevel1Task(); break;
-      case 2: aufgabe=createLevel2Task(); break;
-      case 3: aufgabe=createLevel3Task(); break;
+      case 1:aufgabe=createLevel1Task();break;
+      case 2:aufgabe=createLevel2Task();break;
+      case 3:aufgabe=createLevel3Task();break;
     }
-    taskEl.innerText = aufgabe;
-    scoreEl.innerText = `Aufgabe ${round} von ${totalRounds} – Punkte: ${score}`;
+    taskEl.innerText=aufgabe;
+    scoreEl.innerText=`Aufgabe ${round} von ${totalRounds} – Punkte: ${score}`;
   }
 
-  /* ---------------- Prüfen (strenge Reihenfolge) ---------------- */
-
-  function check(){
-    const userRaw = answerEl.value;
-    if (!userRaw.trim()) {
-      resultEl.style.color="#555"; resultEl.innerText="Bitte gib eine Lösung ein."; return;
-    }
-
-    const userClean = cleanPreserveOrder(userRaw);  // REIHENFOLGE BLEIBT ERHALTEN
-    const solutionCanonical = canonical(correctSolution); // immer sortiert
-
-    // Schon bewertet? -> keine neue Färbung oder Rundenzählung
-    if (answered) {
-      if (userClean === solutionCanonical) {
-        resultEl.style.color="green";
-        resultEl.innerText="✅ Richtig – aber kein Punkt mehr";
-      } else {
-        resultEl.style.color="#000";
-        resultEl.innerHTML = `❌ Falsch! Richtige Lösung: <b>${solutionCanonical}</b>`;
-      }
-      return;
-    }
-
-    answered = true;
-
-    if (userClean === solutionCanonical) {
+  function checkAnswer(){
+    const input=answerEl.value.trim();
+    if(!input){resultEl.innerText="Bitte gib eine Lösung ein.";return;}
+    answerEl.blur();
+    const correct=normalizeTerm(input)===normalizeTerm(correctSolution);
+    updateProgress(correct);
+    if(correct){
       resultEl.style.color="green";
-      if (firstTry) {
-        score++;
-        segments[round-1].style.backgroundColor="#4caf50";
-        resultEl.innerText="✅ Richtig! (+1 Punkt)";
-      } else {
-        resultEl.innerText="✅ Richtig – aber kein Punkt mehr";
-      }
-    } else {
-      resultEl.style.color="#000";
-      if (firstTry) segments[round-1].style.backgroundColor="#d9534f";
-      resultEl.innerHTML = `❌ Falsch! Richtige Lösung: <b>${solutionCanonical}</b>`;
+      if(firstTry){score++;resultEl.innerText="✅ Richtig! (+1 Punkt)";}
+      else resultEl.innerText="✅ Richtig (kein Punkt mehr)";
+    }else{
+      resultEl.style.color="#d00";
+      resultEl.innerHTML=`❌ Falsch! Richtige Lösung: <b>${correctSolution}</b>`;
     }
-
-    firstTry = false;
+    firstTry=false;
     round++;
-    scoreEl.innerText = `Aufgabe ${Math.min(round,totalRounds)} von ${totalRounds} – Punkte: ${score}`;
+    scoreEl.innerText=`Aufgabe ${Math.min(round,totalRounds)} von ${totalRounds} – Punkte: ${score}`;
   }
 
-  checkBtn.addEventListener("click", check);
-  newBtn.addEventListener("click", newTask);
-  answerEl.addEventListener("keydown", e => { if (e.key==="Enter") check(); });
+  checkBtn.addEventListener("click",checkAnswer);
+  newBtn.addEventListener("click",newTask);
+  answerEl.addEventListener("keydown",e=>{if(e.key==="Enter")checkAnswer();});
 
-  initProgressBar();
+  setupProgress();
   newTask();
+
 });
 </script>
 </body>
