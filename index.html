@@ -103,74 +103,77 @@ document.addEventListener("DOMContentLoaded", () => {
     return `${coeff}${variable}`;
   }
 
-  /* Kanonische Form für die Lösung: Variablen (alphabetisch), dann Zahl */
-  function canonical(str) {
-    if (!str) return "0";
-    str = str.trim()
-             .replace(/^\+/, "")
-             .replace(/\s+/g,"")
-             .replace(/\*\*/g,"^")
-             .replace(/\*/g,"")
-             .replace(/\-\-/g,"+")
-             .replace(/\+\+/g,"+");
+function canonical(str) {
+  if (!str) return "0";
+  str = str.trim()
+           .replace(/^\+/, "")
+           .replace(/\s+/g, "")
+           .replace(/\*\*/g, "^")
+           .replace(/\*/g, "")
+           .replace(/\-\-/g, "+")
+           .replace(/\+\+/g, "+");
 
-    const parts = str.match(/[+\-]?\d*[a-z]?\^?\d*/g)?.filter(Boolean) || [];
+  const parts = str.match(/[+\-]?\d*[a-z]?\^?\d*/g)?.filter(Boolean) || [];
 
-    const parsed = parts.map(p => {
-      const m = p.match(/^([+\-]?\d*)([a-z]?)(?:\^(\d+))?$/);
-      if (!m) return {coeff:0,var:"",exp:0};
-      let coeff = Number(m[1]);
-      const variable = m[2] || "";
-      const exp = Number(m[3] || (variable ? 1 : 0));
-      if (isNaN(coeff)) {
-        if (m[1] === "-" || p.startsWith("-")) coeff = -1;
-        else if (m[1] === "+" || (m[1] === "" && variable)) coeff = 1;
-        else coeff = 0;
-      }
-      return {coeff, var:variable, exp};
-    });
+  const parsed = parts.map(p => {
+    const m = p.match(/^([+\-]?\d*)([a-z]?)(?:\^(\d+))?$/);
+    if (!m) return { coeff: 0, var: "", exp: 0 };
 
-    // Sortierung: Variablen zuerst, dann Zahl; innerhalb Variablen alphabetisch, Exp. absteigend
-    parsed.sort((a,b)=>{
-      const aConst = a.var==="";
-      const bConst = b.var==="";
-      if (aConst && !bConst) return 1;     // Zahl nach hinten
-      if (!aConst && bConst) return -1;    // Variablen nach vorne
-      if (a.var < b.var) return -1;
-      if (a.var > b.var) return 1;
-      return b.exp - a.exp;
-    });
+    const variable = m[2] || "";
+    const exp = Number(m[3] || (variable ? 1 : 0));
 
-    // Gleichartige zusammenfassen
-    const combined = [];
-    for (const t of parsed) {
-      if (!combined.length) { combined.push({...t}); continue; }
-      const last = combined[combined.length-1];
-      if (last.var===t.var && last.exp===t.exp) last.coeff += t.coeff;
-      else combined.push({...t});
-    }
+    // *** entscheidender Fix: leeren/+/− Koeffizienten richtig behandeln
+    const raw = m[1];
+    let coeff;
+    if (raw === "" && variable)      coeff = 1;   // "a"
+    else if (raw === "+")            coeff = 1;   // "+a"
+    else if (raw === "-")            coeff = -1;  // "-a"
+    else                              coeff = Number(raw);
+    if (isNaN(coeff)) coeff = 0;
 
-    // Zusammenbauen
-    let result = "";
-    for (const t of combined) {
-      if (t.coeff === 0) continue;
-      let part = "";
-      if (t.var === "") { // Zahl immer am Ende möglich
-        part = t.coeff.toString();
-        if (t.coeff > 0 && result) part = "+" + part;
-      } else if (t.coeff === 1) {
-        part = t.var + (t.exp>1 ? "^"+t.exp : "");
-        if (result) part = "+" + part;
-      } else if (t.coeff === -1) {
-        part = "-" + t.var + (t.exp>1 ? "^"+t.exp : "");
-      } else {
-        part = t.coeff + t.var + (t.exp>1 ? "^"+t.exp : "");
-        if (t.coeff > 0 && result) part = "+" + part;
-      }
-      result += part;
-    }
-    return result || "0";
+    return { coeff, var: variable, exp };
+  });
+
+  // Variablen zuerst (alphabetisch, Exponent absteigend), Zahl am Ende
+  parsed.sort((a,b)=>{
+    const aConst = a.var === "", bConst = b.var === "";
+    if (aConst && !bConst) return 1;
+    if (!aConst && bConst) return -1;
+    if (a.var < b.var) return -1;
+    if (a.var > b.var) return 1;
+    return b.exp - a.exp;
+  });
+
+  // gleichartige Terme zusammenfassen
+  const combined = [];
+  for (const t of parsed) {
+    const last = combined[combined.length-1];
+    if (last && last.var === t.var && last.exp === t.exp) last.coeff += t.coeff;
+    else combined.push({ ...t });
   }
+
+  // wieder zusammensetzen
+  let result = "";
+  for (const t of combined) {
+    if (t.coeff === 0) continue;
+    let part = "";
+    if (t.var === "") {
+      part = t.coeff.toString();
+      if (t.coeff > 0 && result) part = "+" + part;
+    } else if (t.coeff === 1) {
+      part = t.var + (t.exp > 1 ? "^" + t.exp : "");
+      if (result) part = "+" + part;
+    } else if (t.coeff === -1) {
+      part = "-" + t.var + (t.exp > 1 ? "^" + t.exp : "");
+    } else {
+      part = t.coeff + t.var + (t.exp > 1 ? "^" + t.exp : "");
+      if (t.coeff > 0 && result) part = "+" + part;
+    }
+    result += part;
+  }
+  return result || "0";
+}
+
 
   /* Eingabe bereinigen – Reihenfolge bleibt erhalten (damit nur kanonische Reihenfolge zählt) */
   function cleanPreserveOrder(str){
