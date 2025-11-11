@@ -170,38 +170,58 @@ function updateProgress(correct){
     return `${term} = ?`;
   }
 
-  function createLevel2Task(){
-    const count=Math.floor(Math.random()*3)+2;
-    const used=new Set();
-    let terms=[];
-    for(let i=0;i<count;i++){
-      let v=randomChoice(VARS);
-      while(used.has(v))v=randomChoice(VARS);
-      used.add(v);
-      const c=randomCoeff()*sgn();
-      terms.push(formatTerm(c,v));
-    }
-    const expression=terms.join(" + ").replace(/\+\s*\-/g,"- ");
-    const parsed=terms.map(t=>{
-      const m=t.match(/([+\-]?\d*)([a-z])/);
-      if(!m)return {coeff:0,var:""};
-      let coeff=m[1];
-      if(coeff===""||coeff==="+")coeff=1;
-      if(coeff==="-")coeff=-1;
-      return {coeff:Number(coeff),var:m[2]};
-    });
-    parsed.sort((a,b)=>a.var.localeCompare(b.var));
-    let result="";
-    for(const t of parsed){
-      if(t.coeff===0)continue;
-      if(result&&t.coeff>0)result+="+";
-      if(t.coeff===1)result+=t.var;
-      else if(t.coeff===-1)result+="-"+t.var;
-      else result+=t.coeff+t.var;
-    }
-    correctSolution=normalizeTerm(result);
-    return `${expression} = ?`;
+function createLevel2Task(){
+  const termCount = Math.floor(Math.random() * 3) + 2; // 2–4 Terme
+  const allVars = [...VARS];
+  const used = [];
+  let terms = [];
+
+  // Entscheide, ob gleichartige Variablen vorkommen sollen (⅔ der Fälle)
+  const hasDuplicates = Math.random() < 0.66;
+
+  // wähle 2–3 Variablen
+  const varCount = hasDuplicates ? 2 : Math.min(3, termCount);
+  for (let i = 0; i < varCount; i++) {
+    const v = randomChoice(allVars.splice(Math.floor(Math.random()*allVars.length),1));
+    used.push(v);
   }
+
+  // Erzeuge die Terme
+  for (let i = 0; i < termCount; i++) {
+    const v = hasDuplicates ? randomChoice(used) : used[i % used.length];
+    const c = randomCoeff() * sgn();
+    terms.push(formatTerm(c, v));
+  }
+
+  // Ausdruck hübsch darstellen
+  const expression = terms.join(" + ").replace(/\+\s*\-/g,"- ");
+
+  // ➕ Gleiche Variablen zusammenfassen
+  const collected = {};
+  for (const t of terms) {
+    const m = t.match(/([+\-]?\d*)([a-z])/);
+    if (!m) continue;
+    let coeff = m[1];
+    if (coeff === "" || coeff === "+") coeff = 1;
+    if (coeff === "-") coeff = -1;
+    const v = m[2];
+    collected[v] = (collected[v] || 0) + Number(coeff);
+  }
+
+  // alphabetisch sortierte Ausgabe
+  const sorted = Object.entries(collected).sort((a,b)=>a[0].localeCompare(b[0]));
+  let result = "";
+  for (const [v,c] of sorted) {
+    if (c === 0) continue;
+    if (result && c > 0) result += "+";
+    if (c === 1) result += v;
+    else if (c === -1) result += "-" + v;
+    else result += c + v;
+  }
+
+  correctSolution = normalizeTerm(result || "0");
+  return `${expression} = ?`;
+}
 
   function createLevel3Task(){
     const a=randomCoeff()*sgn();
