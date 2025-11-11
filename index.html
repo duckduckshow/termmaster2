@@ -101,7 +101,7 @@ document.addEventListener("DOMContentLoaded", () => {
     "Level 3: Klammerausdrücke"
   ];
 
-  // Entfernt 1x und normalisiert +-, --
+  // Entfernt überflüssige 1x, normalisiert Vorzeichen
   function cleanOnes(str) {
     return str
       .replace(/(^|[+\-])1([a-z])/g, '$1$2')
@@ -110,23 +110,20 @@ document.addEventListener("DOMContentLoaded", () => {
       .replace(/\-\-/g, '+');
   }
 
-  // Alphabetisch + nach Hochzahl sortieren (falls nötig)
+  // Alphabetisch + nach Hochzahl sortieren
   function normalizeTerm(str) {
     str = cleanOnes(str).replace(/\s+/g,'').replace(/\*/g,'');
     const parts = str.match(/[+\-]?\d*[a-z]?\^?\d*/g)?.filter(p=>p) || [str];
 
     const parsed = parts.map(p=>{
       const m = p.match(/^([+\-]?\d*)([a-z]?)(?:\^(\d+))?$/);
-      if (!m) return {orig:p, coeff:0, var:"", exp:0};
-      return {
-        orig:p,
-        coeff:parseInt(m[1] || (m[2]?"1":"0")),
-        var:m[2] || "",
-        exp:parseInt(m[3] || (m[2]?"1":"0"))
-      };
+      if (!m) return {coeff:0,var:"",exp:0};
+      const coeff = Number(m[1] || (m[2]?"1":"0"));
+      const variable = m[2] || "";
+      const exp = Number(m[3] || (variable?"1":"0"));
+      return {coeff,isNaN:()=>isNaN(coeff),var:variable,exp};
     });
 
-    // Sortieren: alphabetisch, dann exponent absteigend
     parsed.sort((a,b)=>{
       if (a.var < b.var) return -1;
       if (a.var > b.var) return 1;
@@ -134,21 +131,20 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     let result="";
-    for (let i=0;i<parsed.length;i++){
-      const t = parsed[i];
-      if (t.coeff===0 && t.var==="") continue;
-      let coeffStr="";
-      if (t.var==="") coeffStr = t.coeff.toString();
-      else if (t.coeff===1) coeffStr = t.var + (t.exp>1?"^"+t.exp:"");
-      else if (t.coeff===-1) coeffStr = "-"+t.var + (t.exp>1?"^"+t.exp:"");
-      else coeffStr = t.coeff + t.var + (t.exp>1?"^"+t.exp:"");
-      if (result && !coeffStr.startsWith('-')) result += '+';
-      result += coeffStr;
+    for (const t of parsed){
+      if (isNaN(t.coeff) || t.coeff===0) continue;
+      let part="";
+      if (t.var==="") part = t.coeff.toString();
+      else if (t.coeff===1) part = t.var + (t.exp>1?"^"+t.exp:"");
+      else if (t.coeff===-1) part = "-"+t.var + (t.exp>1?"^"+t.exp:"");
+      else part = t.coeff + t.var + (t.exp>1?"^"+t.exp:"");
+      if (result && !part.startsWith('-')) result += '+';
+      result += part;
     }
     return result || "0";
   }
 
-  // --- fix gegen NaN ---
+  // Sicheres Formatieren
   function formatTerm(coeff, variable="") {
     coeff = Number(coeff);
     if (isNaN(coeff)) coeff = 0;
@@ -159,37 +155,49 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // ---------- Aufgaben ----------
+  // Level 1
   function createLevel1Task(){
-    const v = randomChoice(VARS);
+    const v = randomChoice(VARS) || "x";
     const c1 = Number(randomCoeff() * sgn());
     const c2 = Number(randomCoeff() * sgn());
-    const term = `${formatTerm(c1,v)} ${c2>=0?'+':'-'} ${formatTerm(Math.abs(c2),v)}`;
-    const sum = Number(c1) + Number(c2);
-    const formatted = (sum === 0) ? "0" : formatTerm(sum,v);
+    const term = `${formatTerm(c1, v)} ${c2 >= 0 ? '+' : '-'} ${formatTerm(Math.abs(c2), v)}`;
+    const sum = (isNaN(c1)?0:c1) + (isNaN(c2)?0:c2);
+    let formatted;
+    if (sum === 0) formatted = "0";
+    else if (sum === 1) formatted = v;
+    else if (sum === -1) formatted = "-" + v;
+    else formatted = formatTerm(sum, v);
     correctSolution = normalizeTerm(formatted);
     return `${term} = ?`;
   }
 
+  // Level 2
   function createLevel2Task(){
     const v1 = randomChoice(VARS);
-    let v2 = randomChoice(VARS); while (v2===v1) v2 = randomChoice(VARS);
+    let v2 = randomChoice(VARS);
+    while (v2 === v1) v2 = randomChoice(VARS);
+
     const c1 = Number(randomCoeff() * sgn());
     const c2 = Number(randomCoeff() * sgn());
     const c3 = Number(randomCoeff() * sgn());
-    const term = `${formatTerm(c1,v1)} ${c2>=0?'+':'-'} ${formatTerm(Math.abs(c2),v2)} ${c3>=0?'+':'-'} ${formatTerm(Math.abs(c3),v1)}`;
-    const sum1 = Number(c1) + Number(c3);
+
+    const term = `${formatTerm(c1, v1)} ${c2 >= 0 ? '+' : '-'} ${formatTerm(Math.abs(c2), v2)} ${c3 >= 0 ? '+' : '-'} ${formatTerm(Math.abs(c3), v1)}`;
+    const sum1 = (isNaN(c1)?0:c1) + (isNaN(c3)?0:c3);
+
     let res = "";
-    if (sum1 !== 0) res += formatTerm(sum1,v1);
+    if (sum1 !== 0) res += formatTerm(sum1, v1);
     if (c2 !== 0) {
-      res += (res ? (c2>0 ? " + " : " - ") : (c2>0 ? "" : "-")) + formatTerm(Math.abs(c2),v2);
+      const sign = (res ? (c2>0?" + ":" - ") : (c2>0?"":"-"));
+      res += sign + formatTerm(Math.abs(c2), v2);
     }
     correctSolution = normalizeTerm(res || "0");
     return `${term} = ?`;
   }
 
+  // Level 3
   function createLevel3Task(){
     const v = randomChoice(VARS);
-    const outer = (Math.floor(Math.random()*9) - 4);
+    const outer = Number(Math.floor(Math.random()*9) - 4);
     const cVar = Number(randomCoeff() * sgn());
     const cNum = Number(randomCoeff() * sgn());
     const op = Math.random()<0.5 ? '+' : '-';
@@ -199,9 +207,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const numPart = outer + ((op==='+') ? cNum : -cNum);
 
     let res = "";
-    if (varPart !== 0) res += formatTerm(varPart,v);
+    if (varPart !== 0) res += formatTerm(varPart, v);
     if (numPart !== 0) {
-      res += (res ? (numPart>0 ? " + " : " - ") : (numPart>0 ? "" : "-")) + Math.abs(numPart);
+      const sign = (res ? (numPart>0?" + ":" - ") : (numPart>0?"":"-"));
+      res += sign + Math.abs(numPart);
     }
     correctSolution = normalizeTerm(res || "0");
     return `${task} = ?`;
@@ -247,17 +256,13 @@ document.addEventListener("DOMContentLoaded", () => {
   function check(){
     const input = normalizeTerm(answerEl.value.trim());
     const correct = normalizeTerm(correctSolution);
-
     if (!input) { resultEl.style.color="#555"; resultEl.innerText="Bitte gib eine Lösung ein."; return; }
 
     if (answered) {
-      if (input===correct) {
-        resultEl.style.color="green";
-        resultEl.innerText="✅ Richtig – aber kein Punkt mehr";
-      } else {
-        resultEl.style.color="#000";
-        resultEl.innerHTML = `❌ Falsch! Richtige Lösung: <b>${correctSolution}</b>`;
-      }
+      resultEl.style.color = (input===correct ? "green" : "#000");
+      resultEl.innerHTML = (input===correct)
+        ? "✅ Richtig – aber kein Punkt mehr"
+        : `❌ Falsch! Richtige Lösung: <b>${correctSolution}</b>`;
       return;
     }
 
