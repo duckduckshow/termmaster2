@@ -112,42 +112,60 @@ document.addEventListener("DOMContentLoaded", () => {
 
 function normalizeTerm(str) {
   if (!str) return "0";
+
+  // Führendes Plus entfernen, Leerzeichen und * entfernen
   str = str.trim()
-           .replace(/^\+/, "") // <-- entfernt führendes Plus
-           .replace(/\s+/g,'')
-           .replace(/\*/g,'')
-           .replace(/([a-z])(\d)/g,'$1^$2'); // falls x2 statt x^2 geschrieben wird
-  // … (rest deiner bisherigen normalizeTerm-Funktion)
-}
+           .replace(/^\+/, "")
+           .replace(/\s+/g, "")
+           .replace(/\*/g, "")
+           .replace(/\-\-/g, "+")
+           .replace(/\+\+/g, "+");
 
-    const parsed = parts.map(p=>{
-      const m = p.match(/^([+\-]?\d*)([a-z]?)(?:\^(\d+))?$/);
-      if (!m) return {coeff:0,var:"",exp:0};
-      const coeff = Number(m[1] || (m[2]?"1":"0"));
-      const variable = m[2] || "";
-      const exp = Number(m[3] || (variable?"1":"0"));
-      return {coeff,isNaN:()=>isNaN(coeff),var:variable,exp};
-    });
+  // Einzelne Terme zerlegen, z. B. "-3x^2", "+4x", "5"
+  const parts = str.match(/[+\-]?\d*[a-z]?\^?\d*/g)?.filter(Boolean) || [];
 
-    parsed.sort((a,b)=>{
-      if (a.var < b.var) return -1;
-      if (a.var > b.var) return 1;
-      return b.exp - a.exp;
-    });
+  const parsed = parts.map(p => {
+    const m = p.match(/^([+\-]?\d*)([a-z]?)(?:\^(\d+))?$/);
+    if (!m) return { coeff: 0, var: "", exp: 0 };
 
-    let result="";
-    for (const t of parsed){
-      if (isNaN(t.coeff) || t.coeff===0) continue;
-      let part="";
-      if (t.var==="") part = t.coeff.toString();
-      else if (t.coeff===1) part = t.var + (t.exp>1?"^"+t.exp:"");
-      else if (t.coeff===-1) part = "-"+t.var + (t.exp>1?"^"+t.exp:"");
-      else part = t.coeff + t.var + (t.exp>1?"^"+t.exp:"");
-      if (result && !part.startsWith('-')) result += '+';
-      result += part;
+    let coeff = Number(m[1]);
+    const variable = m[2] || "";
+    const exp = Number(m[3] || (variable ? 1 : 0));
+
+    if (isNaN(coeff)) {
+      // kein Koeffizient angegeben (z. B. "+x" oder "-y")
+      if (m[1] === "-" || p.startsWith("-")) coeff = -1;
+      else if (m[1] === "+" || m[1] === "" && variable) coeff = 1;
+      else coeff = 0;
     }
-    return result || "0";
+    return { coeff, var: variable, exp };
+  });
+
+  // Alphabetische Sortierung, bei gleicher Variable nach Hochzahl absteigend
+  parsed.sort((a, b) => {
+    if (a.var < b.var) return -1;
+    if (a.var > b.var) return 1;
+    return b.exp - a.exp;
+  });
+
+  // Zusammenbauen, dabei überflüssige +1/-1 weglassen
+  let result = "";
+  for (const t of parsed) {
+    if (isNaN(t.coeff) || t.coeff === 0) continue;
+
+    let part = "";
+    if (t.var === "") part = t.coeff.toString();
+    else if (t.coeff === 1) part = t.var + (t.exp > 1 ? "^" + t.exp : "");
+    else if (t.coeff === -1) part = "-" + t.var + (t.exp > 1 ? "^" + t.exp : "");
+    else part = t.coeff + t.var + (t.exp > 1 ? "^" + t.exp : "");
+
+    // Pluszeichen zwischen positiven Termen hinzufügen
+    if (result && !part.startsWith("-")) result += "+";
+    result += part;
   }
+
+  return result || "0";
+}
 
   // Sicheres Formatieren
   function formatTerm(coeff, variable="") {
