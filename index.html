@@ -18,7 +18,6 @@
   #score { font-size:1.1em; margin:8px; color:#333; }
   #levelDisplay { font-weight:bold; color:#007bff; margin-bottom:5px; }
 
-  /* Fortschritt: 10 gleich breite Segmente */
   #progressContainer {
     width:80%; max-width:400px; height:20px;
     background-color:#ddd; border-radius:10px;
@@ -81,8 +80,8 @@ document.addEventListener("DOMContentLoaded", () => {
   // Status
   let level = 1, round = 1, totalRounds = 10, score = 0;
   let correctSolution = "";
-  let firstTry = true;     // zählt Punkte nur beim ersten richtigen
-  let answered = false;    // färbt Segment nur beim ersten Prüfen
+  let firstTry = true;
+  let answered = false;
   const segments = [];
 
   // Fortschrittsbalken initialisieren
@@ -103,62 +102,70 @@ document.addEventListener("DOMContentLoaded", () => {
     "Level 3: Klammerausdrücke"
   ];
 
+  // ---------- Hilfsfunktionen ----------
+  function cleanOnes(str) {
+    // Entferne "1x" → "x" und "-1x" → "-x"
+    return str
+      .replace(/(^|[+\-])1([a-z])/g, '$1$2')
+      .replace(/(^|[+\-])0[a-z]\b/g, ''); // 0x entfernen
+  }
+
+  function formatTerm(coeff, variable="") {
+    if (variable === "") return `${coeff}`;
+    if (coeff === 1) return `${variable}`;
+    if (coeff === -1) return `-${variable}`;
+    return `${coeff}${variable}`;
+  }
+
   // ---------- Aufgaben ----------
-  // L1: gleicher Buchstabe, ohne Klammern
   function createLevel1Task(){
     const v = randomChoice(VARS);
     const c1 = randomCoeff()*sgn();
     const c2 = randomCoeff()*sgn();
-    const term = `${c1}${v} ${c2>=0?'+':'-'} ${Math.abs(c2)}${v}`;
+    const term = `${formatTerm(c1,v)} ${c2>=0?'+':'-'} ${formatTerm(Math.abs(c2),v)}`;
     const sum = c1 + c2;
-    correctSolution = (sum===0) ? "0" : `${sum}${v}`;
+    correctSolution = (sum===0) ? "0" : formatTerm(sum,v);
     return `${term} = ?`;
   }
 
-  // L2: zwei Variablen, nur die gleichen zusammenfassen
   function createLevel2Task(){
     const v1 = randomChoice(VARS);
     let v2 = randomChoice(VARS); while (v2===v1) v2 = randomChoice(VARS);
     const c1 = randomCoeff()*sgn();
     const c2 = randomCoeff()*sgn();
     const c3 = randomCoeff()*sgn();
-    const term = `${c1}${v1} ${c2>=0?'+':'-'} ${Math.abs(c2)}${v2} ${c3>=0?'+':'-'} ${Math.abs(c3)}${v1}`;
-    const sum1 = c1 + c3;   // v1 zusammenfassen
+    const term = `${formatTerm(c1,v1)} ${c2>=0?'+':'-'} ${formatTerm(Math.abs(c2),v2)} ${c3>=0?'+':'-'} ${formatTerm(Math.abs(c3),v1)}`;
+    const sum1 = c1 + c3;
     let res = "";
-    if (sum1 !== 0) res += `${sum1}${v1}`;
+    if (sum1 !== 0) res += formatTerm(sum1,v1);
     if (c2 !== 0) {
-      res += (res ? (c2>0 ? " + " : " - ") : (c2>0 ? "" : "-")) + `${Math.abs(c2)}${v2}`;
+      res += (res ? (c2>0 ? " + " : " - ") : (c2>0 ? "" : "-")) + formatTerm(Math.abs(c2),v2);
     }
     correctSolution = res || "0";
     return `${term} = ?`;
   }
 
-  // L3: einfache Klammern, z. B.  (-8) - (x - 4)
   function createLevel3Task(){
     const v = randomChoice(VARS);
-    const outer = (Math.floor(Math.random()*9) - 4);       // -4..+4, 0 → lassen wir zu
-    const cVar = randomCoeff()*sgn();                       // Koeffizient vor v in Klammer
-    const cNum = randomCoeff()*sgn();                       // Zahl in Klammer
-    const op = Math.random()<0.5 ? '+' : '-';               // + ( ... ) oder - ( ... )
+    const outer = (Math.floor(Math.random()*9) - 4);
+    const cVar = randomCoeff()*sgn();
+    const cNum = randomCoeff()*sgn();
+    const op = Math.random()<0.5 ? '+' : '-';
+    const task = `(${outer}) ${op} (${formatTerm(cVar,v)} ${cNum>=0?'+':'-'} ${Math.abs(cNum)})`;
 
-    // Text für Aufgabe
-    const task = `(${outer}) ${op} (${cVar}${v} ${cNum>=0?'+':'-'} ${Math.abs(cNum)})`;
-
-    // Klammer auflösen
     const varPart = (op==='+') ? cVar : -cVar;
     const numPart = outer + ((op==='+') ? cNum : -cNum);
 
-    // Ergebnis hübsch formatieren
     let res = "";
-    if (varPart !== 0) res += `${varPart}${v}`;
+    if (varPart !== 0) res += formatTerm(varPart,v);
     if (numPart !== 0) {
-      res += (res ? (numPart>0 ? " + " : " - ") : (numPart>0 ? "" : "-")) + `${Math.abs(numPart)}`;
+      res += (res ? (numPart>0 ? " + " : " - ") : (numPart>0 ? "" : "-")) + Math.abs(numPart);
     }
     correctSolution = res || "0";
     return `${task} = ?`;
   }
 
-  // ---------- Runden/Level ----------
+  // ---------- Levelsteuerung ----------
   function nextLevel(){
     if (score>=8 && level<3) {
       level++;
@@ -194,15 +201,14 @@ document.addEventListener("DOMContentLoaded", () => {
     scoreEl.innerText = `Aufgabe ${round} von ${totalRounds} – Punkte: ${score}`;
   }
 
-  // ---------- Prüfen (1:1 Logik wie im Multiplikationsteil) ----------
+  // ---------- Prüfen ----------
   function check(){
-    const input = answerEl.value.trim().replace(/\s+/g,'');
-    const correct = correctSolution.replace(/\s+/g,'');
+    const input = cleanOnes(answerEl.value.trim().replace(/\s+/g,''));
+    const correct = cleanOnes(correctSolution.replace(/\s+/g,''));
 
     if (!input) { resultEl.style.color="#555"; resultEl.innerText="Bitte gib eine Lösung ein."; return; }
 
-    // Schon bewertet? -> keine Segment-/Rundenänderung mehr
-    if (answered) {
+    if (answered) { // keine neue Färbung
       if (input===correct) {
         resultEl.style.color="green";
         resultEl.innerText="✅ Richtig – aber kein Punkt mehr";
@@ -213,14 +219,11 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // Erste Bewertung dieser Aufgabe
     answered = true;
-
     if (input===correct) {
       resultEl.style.color="green";
-      if (firstTry) { score++; segments[round-1].style.backgroundColor="#4caf50"; }
-      else { resultEl.innerText="✅ Richtig – aber kein Punkt mehr"; segments[round-1].style.backgroundColor="#4caf50"; }
-      if (firstTry) resultEl.innerText="✅ Richtig! (+1 Punkt)";
+      if (firstTry) { score++; segments[round-1].style.backgroundColor="#4caf50"; resultEl.innerText="✅ Richtig! (+1 Punkt)"; }
+      else { resultEl.innerText="✅ Richtig – aber kein Punkt mehr"; }
     } else {
       resultEl.style.color="#000";
       if (firstTry) segments[round-1].style.backgroundColor="#d9534f";
