@@ -86,14 +86,15 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  function updateProgress(correct){
-    if(round>1 && round<=totalRounds+1){
-      const seg=progressSegments[round-2];
-      if(seg && !seg.classList.contains("correct") && !seg.classList.contains("wrong")){
-        seg.classList.add(correct?"correct":"wrong");
-      }
+function updateProgress(correct){
+  const index = round - 1; // aktuelle Aufgabe (0-basiert)
+  if (index >= 0 && index < progressSegments.length) {
+    const seg = progressSegments[index];
+    if (!seg.classList.contains("correct") && !seg.classList.contains("wrong")) {
+      seg.classList.add(correct ? "correct" : "wrong");
     }
   }
+}
 
   function formatTerm(coeff, variable){
     if(variable===""){
@@ -237,24 +238,28 @@ document.addEventListener("DOMContentLoaded", () => {
     scoreEl.innerText=`Aufgabe ${round} von ${totalRounds} – Punkte: ${score}`;
   }
 
-  function checkAnswer(){
-    const input=answerEl.value.trim();
-    if(!input){resultEl.innerText="Bitte gib eine Lösung ein.";return;}
-    answerEl.blur();
-    const correct=normalizeTerm(input)===normalizeTerm(correctSolution);
-    updateProgress(correct);
-    if(correct){
-      resultEl.style.color="green";
-      if(firstTry){score++;resultEl.innerText="✅ Richtig! (+1 Punkt)";}
-      else resultEl.innerText="✅ Richtig (kein Punkt mehr)";
-    }else{
-      resultEl.style.color="#d00";
-      resultEl.innerHTML=`❌ Falsch! Richtige Lösung: <b>${correctSolution}</b>`;
-    }
-    firstTry=false;
-    round++;
-    scoreEl.innerText=`Aufgabe ${Math.min(round,totalRounds)} von ${totalRounds} – Punkte: ${score}`;
+function checkAnswer(){
+  const input = answerEl.value.trim();
+  if(!input){resultEl.innerText="Bitte gib eine Lösung ein.";return;}
+  answerEl.blur();
+  const correct = normalizeTerm(input) === normalizeTerm(correctSolution);
+
+  updateProgress(correct); // ✅ jetzt direkt hier
+
+  if(correct){
+    resultEl.style.color="green";
+    if(firstTry){score++;resultEl.innerText="✅ Richtig! (+1 Punkt)";}
+    else resultEl.innerText="✅ Richtig (kein Punkt mehr)";
+  }else{
+    resultEl.style.color="#d00";
+    resultEl.innerHTML=`❌ Falsch! Richtige Lösung: <b>${correctSolution}</b>`;
   }
+
+  firstTry=false;
+  round++;
+  scoreEl.innerText=`Aufgabe ${Math.min(round,totalRounds)} von ${totalRounds} – Punkte: ${score}`;
+}
+
 
   checkBtn.addEventListener("click",checkAnswer);
   newBtn.addEventListener("click",newTask);
