@@ -148,7 +148,10 @@ document.addEventListener("DOMContentLoaded", () => {
     return result || "0";
   }
 
+  // --- fix gegen NaN ---
   function formatTerm(coeff, variable="") {
+    coeff = Number(coeff);
+    if (isNaN(coeff)) coeff = 0;
     if (variable === "") return `${coeff}`;
     if (coeff === 1) return `${variable}`;
     if (coeff === -1) return `-${variable}`;
@@ -158,22 +161,23 @@ document.addEventListener("DOMContentLoaded", () => {
   // ---------- Aufgaben ----------
   function createLevel1Task(){
     const v = randomChoice(VARS);
-    const c1 = randomCoeff()*sgn();
-    const c2 = randomCoeff()*sgn();
+    const c1 = Number(randomCoeff() * sgn());
+    const c2 = Number(randomCoeff() * sgn());
     const term = `${formatTerm(c1,v)} ${c2>=0?'+':'-'} ${formatTerm(Math.abs(c2),v)}`;
-    const sum = c1 + c2;
-    correctSolution = normalizeTerm(sum===0 ? "0" : formatTerm(sum,v));
+    const sum = Number(c1) + Number(c2);
+    const formatted = (sum === 0) ? "0" : formatTerm(sum,v);
+    correctSolution = normalizeTerm(formatted);
     return `${term} = ?`;
   }
 
   function createLevel2Task(){
     const v1 = randomChoice(VARS);
     let v2 = randomChoice(VARS); while (v2===v1) v2 = randomChoice(VARS);
-    const c1 = randomCoeff()*sgn();
-    const c2 = randomCoeff()*sgn();
-    const c3 = randomCoeff()*sgn();
+    const c1 = Number(randomCoeff() * sgn());
+    const c2 = Number(randomCoeff() * sgn());
+    const c3 = Number(randomCoeff() * sgn());
     const term = `${formatTerm(c1,v1)} ${c2>=0?'+':'-'} ${formatTerm(Math.abs(c2),v2)} ${c3>=0?'+':'-'} ${formatTerm(Math.abs(c3),v1)}`;
-    const sum1 = c1 + c3;
+    const sum1 = Number(c1) + Number(c3);
     let res = "";
     if (sum1 !== 0) res += formatTerm(sum1,v1);
     if (c2 !== 0) {
@@ -186,8 +190,8 @@ document.addEventListener("DOMContentLoaded", () => {
   function createLevel3Task(){
     const v = randomChoice(VARS);
     const outer = (Math.floor(Math.random()*9) - 4);
-    const cVar = randomCoeff()*sgn();
-    const cNum = randomCoeff()*sgn();
+    const cVar = Number(randomCoeff() * sgn());
+    const cNum = Number(randomCoeff() * sgn());
     const op = Math.random()<0.5 ? '+' : '-';
     const task = `(${outer}) ${op} (${formatTerm(cVar,v)} ${cNum>=0?'+':'-'} ${Math.abs(cNum)})`;
 
