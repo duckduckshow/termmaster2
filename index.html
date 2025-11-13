@@ -75,7 +75,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
   function updateProgress(correct){
-    const idx = round - 1; // aktuelles Item (0-basiert)
+    const idx = round - 1;
     if (idx>=0 && idx<segments.length) {
       const seg = segments[idx];
       if (!seg.classList.contains("correct") && !seg.classList.contains("wrong")) {
@@ -84,17 +84,17 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  /* Anzeige: Zahlen nur mit Klammern wenn Vorzeichen gezeigt wird */
+  /* Anzeige: Zahlen */
   function showNumberWithOptionalParens(n) {
     if (n < 0) return `(${n})`;
     return Math.random() < 0.75 ? `(+${n})` : `${n}`;
   }
 
-  /* Format für Terme in der Anzeige */
+  /* Formatierung */
   function formatTerm(coeff, variable="") {
     coeff = Number(coeff);
     if (isNaN(coeff)) coeff = 0;
-    if (variable === "") { // reine Zahl
+    if (variable === "") {
       if (coeff < 0) return `(${coeff})`;
       return Math.random() < 0.75 ? `(+${coeff})` : `${coeff}`;
     }
@@ -103,79 +103,75 @@ document.addEventListener("DOMContentLoaded", () => {
     return `${coeff}${variable}`;
   }
 
-function canonical(str) {
-  if (!str) return "0";
-  str = str.trim()
-           .replace(/^\+/, "")
-           .replace(/\s+/g, "")
-           .replace(/\*\*/g, "^")
-           .replace(/\*/g, "")
-           .replace(/\-\-/g, "+")
-           .replace(/\+\+/g, "+");
+  /* ***** Kanonische Form ***** */
+  function canonical(str) {
+    if (!str) return "0";
+    str = str.trim()
+             .replace(/^\+/, "")
+             .replace(/\s+/g, "")
+             .replace(/\*\*/g, "^")
+             .replace(/\*/g, "")
+             .replace(/\-\-/g, "+")
+             .replace(/\+\+/g, "+");
 
-  const parts = str.match(/[+\-]?\d*[a-z]?\^?\d*/g)?.filter(Boolean) || [];
+    const parts = str.match(/[+\-]?\d*[a-z]?\^?\d*/g)?.filter(Boolean) || [];
 
-  const parsed = parts.map(p => {
-    const m = p.match(/^([+\-]?\d*)([a-z]?)(?:\^(\d+))?$/);
-    if (!m) return { coeff: 0, var: "", exp: 0 };
+    const parsed = parts.map(p => {
+      const m = p.match(/^([+\-]?\d*)([a-z]?)(?:\^(\d+))?$/);
+      if (!m) return { coeff: 0, var: "", exp: 0 };
 
-    const variable = m[2] || "";
-    const exp = Number(m[3] || (variable ? 1 : 0));
+      const variable = m[2] || "";
+      const exp = Number(m[3] || (variable ? 1 : 0));
 
-    // *** entscheidender Fix: leeren/+/− Koeffizienten richtig behandeln
-    const raw = m[1];
-    let coeff;
-    if (raw === "" && variable)      coeff = 1;   // "a"
-    else if (raw === "+")            coeff = 1;   // "+a"
-    else if (raw === "-")            coeff = -1;  // "-a"
-    else                              coeff = Number(raw);
-    if (isNaN(coeff)) coeff = 0;
+      const raw = m[1];
+      let coeff;
+      if (raw === "" && variable)      coeff = 1;
+      else if (raw === "+")            coeff = 1;
+      else if (raw === "-")            coeff = -1;
+      else                              coeff = Number(raw);
+      if (isNaN(coeff)) coeff = 0;
 
-    return { coeff, var: variable, exp };
-  });
+      return { coeff, var: variable, exp };
+    });
 
-  // Variablen zuerst (alphabetisch, Exponent absteigend), Zahl am Ende
-  parsed.sort((a,b)=>{
-    const aConst = a.var === "", bConst = b.var === "";
-    if (aConst && !bConst) return 1;
-    if (!aConst && bConst) return -1;
-    if (a.var < b.var) return -1;
-    if (a.var > b.var) return 1;
-    return b.exp - a.exp;
-  });
+    parsed.sort((a,b)=>{
+      const aConst = a.var === "", bConst = b.var === "";
+      if (aConst && !bConst) return 1;
+      if (!aConst && bConst) return -1;
+      if (a.var < b.var) return -1;
+      if (a.var > b.var) return 1;
+      return b.exp - a.exp;
+    });
 
-  // gleichartige Terme zusammenfassen
-  const combined = [];
-  for (const t of parsed) {
-    const last = combined[combined.length-1];
-    if (last && last.var === t.var && last.exp === t.exp) last.coeff += t.coeff;
-    else combined.push({ ...t });
-  }
-
-  // wieder zusammensetzen
-  let result = "";
-  for (const t of combined) {
-    if (t.coeff === 0) continue;
-    let part = "";
-    if (t.var === "") {
-      part = t.coeff.toString();
-      if (t.coeff > 0 && result) part = "+" + part;
-    } else if (t.coeff === 1) {
-      part = t.var + (t.exp > 1 ? "^" + t.exp : "");
-      if (result) part = "+" + part;
-    } else if (t.coeff === -1) {
-      part = "-" + t.var + (t.exp > 1 ? "^" + t.exp : "");
-    } else {
-      part = t.coeff + t.var + (t.exp > 1 ? "^" + t.exp : "");
-      if (t.coeff > 0 && result) part = "+" + part;
+    const combined = [];
+    for (const t of parsed) {
+      const last = combined[combined.length-1];
+      if (last && last.var === t.var && last.exp === t.exp) last.coeff += t.coeff;
+      else combined.push({ ...t });
     }
-    result += part;
+
+    let result = "";
+    for (const t of combined) {
+      if (t.coeff === 0) continue;
+      let part = "";
+      if (t.var === "") {
+        part = t.coeff.toString();
+        if (t.coeff > 0 && result) part = "+" + part;
+      } else if (t.coeff === 1) {
+        part = t.var + (t.exp > 1 ? "^" + t.exp : "");
+        if (result) part = "+" + part;
+      } else if (t.coeff === -1) {
+        part = "-" + t.var + (t.exp > 1 ? "^" + t.exp : "");
+      } else {
+        part = t.coeff + t.var + (t.exp > 1 ? "^" + t.exp : "");
+        if (t.coeff > 0 && result) part = "+" + part;
+      }
+      result += part;
+    }
+    return result || "0";
   }
-  return result || "0";
-}
 
-
-  /* Eingabe bereinigen – Reihenfolge bleibt erhalten (damit nur kanonische Reihenfolge zählt) */
+  /* Eingabe bereinigen */
   function cleanPreserveOrder(str){
     if (!str) return "";
     return str.trim()
@@ -188,9 +184,60 @@ function canonical(str) {
               .replace(/(^|[+\-])1([a-z])/g,"$1$2");
   }
 
+  /* ***** Fehlerdiagnose ***** */
+  function diagnoseError(user, correct) {
+
+    const parse = str =>
+      canonical(str)
+        .match(/[+\-]?\d*[a-z]?\^?\d*/g)
+        ?.filter(Boolean)
+        .map(p => {
+          const m = p.match(/^([+\-]?\d*)([a-z]?)(?:\^(\d+))?$/);
+          let raw = m[1];
+          let coeff;
+          if (raw === "" && m[2]) coeff = 1;
+          else if (raw === "+") coeff = 1;
+          else if (raw === "-") coeff = -1;
+          else coeff = Number(raw);
+          return { coeff, var: m[2] || "", exp: Number(m[3] || (m[2] ? 1 : 0)) };
+        }) || [];
+
+    const u = parse(user);
+    const c = parse(correct);
+
+    // Vorzeichenfehler
+    for (let ci of c) {
+      const ui = u.find(t => t.var === ci.var && t.exp === ci.exp);
+      if (ui && Math.abs(ui.coeff) === Math.abs(ci.coeff) && ui.coeff !== ci.coeff) {
+        return "Achte gut auf die Vorzeichen (+ und -). Das macht häufig den Fehler.";
+      }
+    }
+
+    // Fehlt ein Term?
+    for (let ci of c) {
+      const ui = u.find(t => t.var === ci.var && t.exp === ci.exp);
+      if (!ui) {
+        return "Du hast nicht alle gleichen Terme richtig zusammengefasst.";
+      }
+    }
+
+    // Zahlen falsch?
+    const uConst = u.find(t => t.var === "");
+    const cConst = c.find(t => t.var === "");
+    if (uConst && cConst && uConst.coeff !== cConst.coeff) {
+      return "Beim Zusammenrechnen der Zahlen ist ein Fehler passiert.";
+    }
+
+    // Reihenfolge falsch?
+    if (canonical(user) !== user) {
+      return "Sortiere zuerst die Buchstaben, dann die Zahl.";
+    }
+
+    return "Schau genau: gleiche Terme zusammenfassen und Vorzeichen beachten.";
+  }
+
   /* ---------- Aufgaben ---------- */
 
-  // Level 1: gleiche Terme
   function createLevel1Task(){
     const v = randomChoice(VARS);
     const c1 = Number(randomCoeff()*sgn());
@@ -209,54 +256,48 @@ function canonical(str) {
     return `${display} = ?`;
   }
 
-  // Level 2: max 2 Variablen + gelegentlich reine Zahlen
   function createLevel2Task(){
-    const termCount = Math.floor(Math.random()*3)+2; // 2–4
+    const termCount = Math.floor(Math.random()*3)+2;
     const chosen = [randomChoice(VARS)];
-    if (Math.random() < 0.5) { // manchmal zweite Variable
+    if (Math.random() < 0.5) {
       let second;
       do { second = randomChoice(VARS); } while (second === chosen[0]);
       chosen.push(second);
     }
 
-    // Erzeuge strukturierte Terme -> {coeff, var}
     const terms = [];
     for (let i=0;i<termCount;i++){
-      const isNumber = Math.random() < 0.3; // ~30% reine Zahl
+      const isNumber = Math.random() < 0.3;
       const v = isNumber ? "" : randomChoice(chosen);
       const c = Number(randomCoeff()*sgn());
       terms.push({coeff:c, var:v});
     }
 
-    // Anzeige bauen (nur für Darstellung)
     const pretty = terms.map(t => {
       if (t.var === "") return formatTerm(t.coeff, "");
       return formatTerm(t.coeff, t.var);
     }).join(" + ").replace(/\+\s*\-/g,"- ");
 
-    // Rechnen: nach Variable gruppieren ('' = Zahl)
-    const sums = new Map(); // key: var ('' für Zahl) -> sumCoeff
+    const sums = new Map();
     for (const t of terms) {
       const key = t.var; const cur = sums.get(key) || 0;
       sums.set(key, cur + t.coeff);
     }
 
-    // Lösung zusammensetzen: Variablen (alphabetisch) dann Zahl
     const entries = Array.from(sums.entries());
-
     entries.sort((a,b)=>{
       const aConst = a[0]==="";
       const bConst = b[0]==="";
-      if (aConst && !bConst) return 1;   // Zahl nach hinten
-      if (!aConst && bConst) return -1;  // Variablen nach vorne
-      return a[0].localeCompare(b[0]);   // alphabetisch
+      if (aConst && !bConst) return 1;
+      if (!aConst && bConst) return -1;
+      return a[0].localeCompare(b[0]);
     });
 
     let res = "";
     for (const [v,sum] of entries) {
       if (sum === 0) continue;
       let part = "";
-      if (v === "") { // reine Zahl
+      if (v === "") {
         part = sum.toString();
         if (sum > 0 && res) part = "+" + part;
       } else if (sum === 1) {
@@ -273,10 +314,9 @@ function canonical(str) {
     return `${pretty} = ?`;
   }
 
-  // Level 3: einfache Klammern
   function createLevel3Task(){
     const v = randomChoice(VARS);
-    const outer = Math.floor(Math.random()*9)-4; // -4..+4
+    const outer = Math.floor(Math.random()*9)-4;
     const cVar = Number(randomCoeff()*sgn());
     const cNum = Number(randomCoeff()*sgn());
     const op = Math.random()<0.5 ? '+' : '-';
@@ -299,7 +339,10 @@ function canonical(str) {
   /* ---------- Ablauf ---------- */
 
   function newTask(){
-    resultEl.innerText=""; answerEl.value=""; firstTry=true;
+    resultEl.innerText="";
+    answerEl.value="";
+    firstTry=true;
+
     if (round>totalRounds) {
       level++;
       if (level>3) { resultEl.innerText="🏆 Alle Level geschafft!"; return; }
@@ -317,49 +360,55 @@ function canonical(str) {
     scoreEl.innerText = `Aufgabe ${round} von ${totalRounds} – Punkte: ${score}`;
   }
 
-function check(){
-  const raw = answerEl.value.trim();
-  if (!raw) {
-    resultEl.style.color="#555";
-    resultEl.innerText="Bitte gib eine Lösung ein.";
-    return;
-  }
-  answerEl.blur();
+  /* ***** CHECK MIT DIAGNOSE ***** */
+  function check(){
+    const raw = answerEl.value.trim();
+    if (!raw) {
+      resultEl.style.color="#555";
+      resultEl.innerText="Bitte gib eine Lösung ein.";
+      return;
+    }
+    answerEl.blur();
 
-  const user = cleanPreserveOrder(raw);
-  const solution = canonical(correctSolution); // schon kanonisch; call zur Sicherheit
+    const user = cleanPreserveOrder(raw);
+    const solution = canonical(correctSolution);
 
-  const ok = (user === solution);
+    const ok = (user === solution);
 
-  // Fortschritt + Runde nur beim ersten Prüfen dieser Aufgabe
-  if (firstTry) {
-    updateProgress(ok);
+    if (firstTry) {
 
-    if (ok) {
-      resultEl.style.color="green";
-      score++;
-      resultEl.innerText = "✅ Richtig! (+1 Punkt)";
+      updateProgress(ok);
+
+      if (ok) {
+        resultEl.style.color="green";
+        score++;
+        resultEl.innerText = "✅ Richtig! (+1 Punkt)";
+      } else {
+        const hint = diagnoseError(user, solution);
+        resultEl.style.color="#000";
+        resultEl.innerHTML =
+          `❌ Falsch! Richtige Lösung: <b>${solution}</b><br><span style="color:#777">${hint}</span>`;
+      }
+
+      round++; 
+
     } else {
-      resultEl.style.color="#000";
-      resultEl.innerHTML = `❌ Falsch! Richtige Lösung: <b>${solution}</b>`;
+
+      if (ok) {
+        resultEl.style.color="green";
+        resultEl.innerText = "✅ Richtig – aber kein Punkt mehr";
+      } else {
+        const hint = diagnoseError(user, solution);
+        resultEl.innerHTML =
+          `❌ Noch falsch. Lösung: <b>${solution}</b><br><span style="color:#777">${hint}</span>`;
+      }
     }
 
-    round++; // nur einmal pro Aufgabe erhöhen
-  } else {
-    // Zweiter/dritter Klick ändert den Balken NICHT mehr, nur Rückmeldung
-    if (ok) {
-      resultEl.style.color="green";
-      resultEl.innerText = "✅ Richtig – aber kein Punkt mehr";
-    } else {
-      resultEl.style.color="#000";
-      resultEl.innerHTML = `❌ Noch nicht richtig. Richtige Lösung: <b>${solution}</b>`;
-    }
+    firstTry = false;
+
+    scoreEl.innerText =
+      `Aufgabe ${Math.min(round,totalRounds)} von ${totalRounds} – Punkte: ${score}`;
   }
-
-  firstTry = false;
-  scoreEl.innerText = `Aufgabe ${Math.min(round,totalRounds)} von ${totalRounds} – Punkte: ${score}`;
-}
-
 
   checkBtn.addEventListener("click", check);
   newBtn.addEventListener("click", newTask);
