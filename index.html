@@ -317,30 +317,49 @@ function canonical(str) {
     scoreEl.innerText = `Aufgabe ${round} von ${totalRounds} – Punkte: ${score}`;
   }
 
-  function check(){
-    const raw = answerEl.value.trim();
-    if (!raw) { resultEl.style.color="#555"; resultEl.innerText="Bitte gib eine Lösung ein."; return; }
-    answerEl.blur();
+function check(){
+  const raw = answerEl.value.trim();
+  if (!raw) {
+    resultEl.style.color="#555";
+    resultEl.innerText="Bitte gib eine Lösung ein.";
+    return;
+  }
+  answerEl.blur();
 
-    const user = cleanPreserveOrder(raw);
-    const solution = canonical(correctSolution); // schon kanonisch; call zur Sicherheit
+  const user = cleanPreserveOrder(raw);
+  const solution = canonical(correctSolution); // schon kanonisch; call zur Sicherheit
 
-    const ok = (user === solution);
+  const ok = (user === solution);
+
+  // Fortschritt + Runde nur beim ersten Prüfen dieser Aufgabe
+  if (firstTry) {
     updateProgress(ok);
 
     if (ok) {
       resultEl.style.color="green";
-      if (firstTry) { score++; resultEl.innerText="✅ Richtig! (+1 Punkt)"; }
-      else resultEl.innerText="✅ Richtig – aber kein Punkt mehr";
+      score++;
+      resultEl.innerText = "✅ Richtig! (+1 Punkt)";
     } else {
       resultEl.style.color="#000";
       resultEl.innerHTML = `❌ Falsch! Richtige Lösung: <b>${solution}</b>`;
     }
 
-    firstTry = false;
-    round++;
-    scoreEl.innerText = `Aufgabe ${Math.min(round,totalRounds)} von ${totalRounds} – Punkte: ${score}`;
+    round++; // nur einmal pro Aufgabe erhöhen
+  } else {
+    // Zweiter/dritter Klick ändert den Balken NICHT mehr, nur Rückmeldung
+    if (ok) {
+      resultEl.style.color="green";
+      resultEl.innerText = "✅ Richtig – aber kein Punkt mehr";
+    } else {
+      resultEl.style.color="#000";
+      resultEl.innerHTML = `❌ Noch nicht richtig. Richtige Lösung: <b>${solution}</b>`;
+    }
   }
+
+  firstTry = false;
+  scoreEl.innerText = `Aufgabe ${Math.min(round,totalRounds)} von ${totalRounds} – Punkte: ${score}`;
+}
+
 
   checkBtn.addEventListener("click", check);
   newBtn.addEventListener("click", newTask);
