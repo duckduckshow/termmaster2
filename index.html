@@ -60,6 +60,20 @@ document.addEventListener("DOMContentLoaded", () => {
   const randomCoeff = (max=9) => Math.floor(Math.random()*max)+1;
   const sgn = () => Math.random()<0.5 ? -1 : +1;
 
+  /* ⭐ NEUER fester Tipptext ⭐ */
+  const FIXED_HINT =
+    "Wie fasse ich Terme mit + und – zusammen?<br>" +
+    "<br><b>1. Beide positiv (+ +)</b><br>" +
+    "→ Zahlen addieren, Ergebnis positiv<br>" +
+    "👉 Guthaben + Guthaben = mehr Guthaben<br>" +
+    "<br><b>2. Beide negativ (– –)</b><br>" +
+    "→ Zahlen addieren, Ergebnis negativ<br>" +
+    "👉 Schulden + Schulden = mehr Schulden<br>" +
+    "<br><b>3. Einer positiv, einer negativ (+ – oder – +)</b><br>" +
+    "→ größere Zahl minus kleinere Zahl, Vorzeichen der größeren Zahl<br>" +
+    "👉 Guthaben und Schulden: der größere Betrag gewinnt<br>" +
+    "<br><b>Hinweis:</b> richtig sortieren nicht vergessen! (Variablen zuerst, Zahl hinten)";
+
   let level = 1, correctSolution = "", round = 1, score = 0, totalRounds = 10, firstTry = true;
   const segments = [];
 
@@ -84,13 +98,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  /* Anzeige: Zahlen */
+  /* Anzeige */
   function showNumberWithOptionalParens(n) {
     if (n < 0) return `(${n})`;
     return Math.random() < 0.75 ? `(+${n})` : `${n}`;
   }
 
-  /* Formatierung */
   function formatTerm(coeff, variable="") {
     coeff = Number(coeff);
     if (isNaN(coeff)) coeff = 0;
@@ -103,7 +116,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return `${coeff}${variable}`;
   }
 
-  /* ***** Kanonische Form ***** */
+  /* Canonical form */
   function canonical(str) {
     if (!str) return "0";
     str = str.trim()
@@ -122,13 +135,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const variable = m[2] || "";
       const exp = Number(m[3] || (variable ? 1 : 0));
-
       const raw = m[1];
       let coeff;
+
       if (raw === "" && variable)      coeff = 1;
       else if (raw === "+")            coeff = 1;
       else if (raw === "-")            coeff = -1;
       else                              coeff = Number(raw);
+
       if (isNaN(coeff)) coeff = 0;
 
       return { coeff, var: variable, exp };
@@ -154,6 +168,7 @@ document.addEventListener("DOMContentLoaded", () => {
     for (const t of combined) {
       if (t.coeff === 0) continue;
       let part = "";
+
       if (t.var === "") {
         part = t.coeff.toString();
         if (t.coeff > 0 && result) part = "+" + part;
@@ -182,58 +197,6 @@ document.addEventListener("DOMContentLoaded", () => {
               .replace(/\-\-/g,"+")
               .replace(/\+\+/g,"+")
               .replace(/(^|[+\-])1([a-z])/g,"$1$2");
-  }
-
-  /* ***** Fehlerdiagnose ***** */
-  function diagnoseError(user, correct) {
-
-    const parse = str =>
-      canonical(str)
-        .match(/[+\-]?\d*[a-z]?\^?\d*/g)
-        ?.filter(Boolean)
-        .map(p => {
-          const m = p.match(/^([+\-]?\d*)([a-z]?)(?:\^(\d+))?$/);
-          let raw = m[1];
-          let coeff;
-          if (raw === "" && m[2]) coeff = 1;
-          else if (raw === "+") coeff = 1;
-          else if (raw === "-") coeff = -1;
-          else coeff = Number(raw);
-          return { coeff, var: m[2] || "", exp: Number(m[3] || (m[2] ? 1 : 0)) };
-        }) || [];
-
-    const u = parse(user);
-    const c = parse(correct);
-
-    // Vorzeichenfehler
-    for (let ci of c) {
-      const ui = u.find(t => t.var === ci.var && t.exp === ci.exp);
-      if (ui && Math.abs(ui.coeff) === Math.abs(ci.coeff) && ui.coeff !== ci.coeff) {
-        return "Achte gut auf die Vorzeichen (+ und -). Das macht häufig den Fehler.";
-      }
-    }
-
-    // Fehlt ein Term?
-    for (let ci of c) {
-      const ui = u.find(t => t.var === ci.var && t.exp === ci.exp);
-      if (!ui) {
-        return "Du hast nicht alle gleichen Terme richtig zusammengefasst.";
-      }
-    }
-
-    // Zahlen falsch?
-    const uConst = u.find(t => t.var === "");
-    const cConst = c.find(t => t.var === "");
-    if (uConst && cConst && uConst.coeff !== cConst.coeff) {
-      return "Beim Zusammenrechnen der Zahlen ist ein Fehler passiert.";
-    }
-
-    // Reihenfolge falsch?
-    if (canonical(user) !== user) {
-      return "Sortiere zuerst die Buchstaben, dann die Zahl.";
-    }
-
-    return "Schau genau: gleiche Terme zusammenfassen und Vorzeichen beachten.";
   }
 
   /* ---------- Aufgaben ---------- */
@@ -360,7 +323,7 @@ document.addEventListener("DOMContentLoaded", () => {
     scoreEl.innerText = `Aufgabe ${round} von ${totalRounds} – Punkte: ${score}`;
   }
 
-  /* ***** CHECK MIT DIAGNOSE ***** */
+  /* ----- Prüfen mit Fix-Hinweis ----- */
   function check(){
     const raw = answerEl.value.trim();
     if (!raw) {
@@ -372,11 +335,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const user = cleanPreserveOrder(raw);
     const solution = canonical(correctSolution);
-
     const ok = (user === solution);
 
     if (firstTry) {
-
       updateProgress(ok);
 
       if (ok) {
@@ -384,28 +345,24 @@ document.addEventListener("DOMContentLoaded", () => {
         score++;
         resultEl.innerText = "✅ Richtig! (+1 Punkt)";
       } else {
-        const hint = diagnoseError(user, solution);
         resultEl.style.color="#000";
         resultEl.innerHTML =
-          `❌ Falsch! Richtige Lösung: <b>${solution}</b><br><span style="color:#777">${hint}</span>`;
+          `❌ Falsch! Richtige Lösung: <b>${solution}</b><br><br>${FIXED_HINT}`;
       }
 
-      round++; 
+      round++;
 
     } else {
-
       if (ok) {
         resultEl.style.color="green";
         resultEl.innerText = "✅ Richtig – aber kein Punkt mehr";
       } else {
-        const hint = diagnoseError(user, solution);
         resultEl.innerHTML =
-          `❌ Noch falsch. Lösung: <b>${solution}</b><br><span style="color:#777">${hint}</span>`;
+          `❌ Noch falsch. Lösung: <b>${solution}</b><br><br>${FIXED_HINT}`;
       }
     }
 
     firstTry = false;
-
     scoreEl.innerText =
       `Aufgabe ${Math.min(round,totalRounds)} von ${totalRounds} – Punkte: ${score}`;
   }
@@ -418,5 +375,6 @@ document.addEventListener("DOMContentLoaded", () => {
   newTask();
 });
 </script>
+
 </body>
 </html>
